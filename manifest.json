@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "zator-ext",
+  "version": "0.1.0",
+  "description": "Хосты текущей вкладки: что открылось, что оборвалось, что уже есть в списках zator.",
+  "permissions": ["webRequest", "storage", "tabs", "clipboardWrite", "alarms"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "src/background/service-worker.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "src/popup/popup.html",
+    "default_title": "zator-ext"
+  },
+  "options_ui": {
+    "page": "src/options/options.html",
+    "open_in_tab": true
+  }
+}

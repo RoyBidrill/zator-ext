@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>zator-ext — настройки</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <main>
+    <h1>zator-ext</h1>
+
+    <section>
+      <h2>Проверка страницы</h2>
+      <p class="muted">Сколько раз обновить вкладку, сколько ждать между обновлениями и сколько ждать одну загрузку. Это не проверка стратегии.</p>
+      <form id="probe-form">
+        <label>Попытки <input id="probe-attempts" inputmode="numeric" size="3"></label>
+        <label>Пауза, сек <input id="probe-pause" inputmode="numeric" size="3"></label>
+        <label>Таймаут, сек <input id="probe-timeout" inputmode="numeric" size="3"></label>
+        <button type="submit">Сохранить</button>
+      </form>
+      <p id="probe-error" class="error" hidden></p>
+    </section>
+
+    <section>
+      <h2>IP игнора</h2>
+      <p class="muted">Точный адрес. Хост, ушедший на такой IP, попадает в «Игнор», даже если код был таймаут. Сети (CIDR) не принимаются.</p>
+      <form id="sinkhole-form">
+        <input id="sinkhole-input" placeholder="0.0.0.0" autocomplete="off">
+        <button type="submit">Добавить</button>
+        <button type="button" id="sinkhole-reset">Вернуть умолчание</button>
+      </form>
+      <p id="sinkhole-error" class="error" hidden></p>
+      <ul id="sinkholes"></ul>
+    </section>
+
+    <section>
+      <h2>Скрытые домены</h2>
+      <button type="button" id="hidden-clear">Очистить</button>
+      <ul id="hidden"></ul>
+    </section>
+
+    <section>
+      <h2>Известные списки zator</h2>
+      <p class="muted">Только сверка. На роутер ничего не пишется. Выключенный список не ставит пометку.</p>
+      <form id="base-form">
+        <label>Адрес каталога списков
+          <input id="catalog-base" size="70" spellcheck="false">
+        </label>
+        <button type="submit">Сохранить</button>
+      </form>
+      <p><button type="button" id="refresh-all">Обновить все</button></p>
+      <div id="lists"></div>
+    </section>
+  </main>
+  <script type="module" src="options.js"></script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "name": "zator-ext",
+  "version": "0.1.0",
+  "description": "Хосты текущей вкладки: что открылось, что оборвалось, что уже есть в списках zator.",
+  "private": true,
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=18"
+  },
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  }
+}

@@ -1,0 +1,12 @@
+body { margin: 0; font: 15px/1.45 system-ui, sans-serif; color: #1c1c1c; }
+main { max-width: 720px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font-size: 22px; }
+h2 { font-size: 16px; margin-top: 28px; }
+.muted { color: #555; }
+.error { color: #9b1c1c; }
+form { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+input { font: inherit; padding: 4px 6px; }
+button { font: inherit; cursor: pointer; }
+li { display: flex; gap: 8px; align-items: center; padding: 3px 0; }
+.list-row { display: grid; grid-template-columns: 180px 1fr auto; gap: 8px; align-items: center; padding: 6px 0; border-top: 1px solid #e4e4e4; }
+.failed { color: #9b1c1c; }
