@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { LIST_ROLE } from '../src/core/contract.js';
 import { buildSuffixIndex, parseHostlist } from '../src/core/matcher.js';
-import { buildReport, nextListCopy } from '../src/core/report.js';
+import { buildReport, nextListCopy, toCsv } from '../src/core/report.js';
 
 function context(extra = {}) {
   return {
@@ -68,6 +68,72 @@ test('a host that answered and was cancelled stays in ok with a cancel count', (
   assert.equal(report.ok[0].canceled, 2);
   assert.equal(report.ok[0].finished, 2);
   assert.equal(report.problem.length, 0);
+});
+
+test('a connection error after an HTTP answer is problem and counts unique errors', () => {
+  const hosts = new Map([['reset.test', {
+    host: 'reset.test',
+    requests: [
+      { statusCode: 200, startedAt: 0, endedAt: 10 },
+      { statusCode: 200, startedAt: 0, endedAt: 20 },
+      { error: 'net::ERR_CONNECTION_RESET', startedAt: 30, endedAt: 40 },
+      { error: 'net::ERR_CONNECTION_RESET', startedAt: 50, endedAt: 60 },
+      { error: 'net::ERR_ABORTED', startedAt: 70, endedAt: 80 },
+      { error: '', startedAt: 90, endedAt: 100 },
+    ],
+  }]]);
+  const report = buildReport(hosts, context());
+  const row = report.problem[0];
+  assert.equal(row.host, 'reset.test');
+  assert.equal(row.section, 'problem');
+  assert.equal(report.ok.length, 0);
+  assert.equal(report.ignored.length, 0);
+  assert.equal(row.requestCount, 6);
+  assert.equal(row.errorCount, 3);
+  assert.deepEqual(row.errors, ['net::ERR_CONNECTION_RESET', 'net::ERR_ABORTED']);
+});
+
+test('a blocker error stays in the folded section and is still counted', () => {
+  const hosts = new Map([['cdn.test', {
+    host: 'cdn.test',
+    requests: [
+      { statusCode: 200, startedAt: 0, endedAt: 40 },
+      { error: 'net::ERR_BLOCKED_BY_CLIENT' },
+    ],
+  }]]);
+  const report = buildReport(hosts, context());
+  const row = report.ok[0];
+  assert.equal(row.section, 'ok');
+  assert.equal(report.problem.length, 0);
+  assert.equal(row.requestCount, 2);
+  assert.equal(row.errorCount, 1);
+  assert.deepEqual(row.errors, ['net::ERR_BLOCKED_BY_CLIENT']);
+});
+
+test('a hidden host with no requests reports zero errors', () => {
+  const hosts = new Map([['quiet.test', { host: 'quiet.test', requests: [] }]]);
+  const report = buildReport(hosts, context({ hidden: ['quiet.test'] }));
+  const row = report.ignored[0];
+  assert.equal(row.ignoreReason, 'hidden');
+  assert.equal(row.requestCount, 0);
+  assert.equal(row.errorCount, 0);
+  assert.deepEqual(row.errors, []);
+});
+
+test('toCsv writes a header for no rows and quotes fields that need it', () => {
+  const header = 'domain,status,requests,errors,error_list,avg_time_ms,avg_speed_bps';
+  assert.equal(toCsv([]), `\uFEFF${header}\n`);
+
+  const csv = toCsv([{
+    host: 'quote.test',
+    section: 'problem',
+    requestCount: 2,
+    errorCount: 1,
+    errors: ['net::ERR_A, "quoted"\nline'],
+    timing: { avg: 12 },
+    speed: null,
+  }]);
+  assert.equal(csv, `\uFEFF${header}\nquote.test,не ок,2,1,"net::ERR_A, ""quoted""\nline",12,\n`);
 });
 
 test('a failed refresh keeps the previous copy', () => {

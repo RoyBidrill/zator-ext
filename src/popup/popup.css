@@ -14,6 +14,46 @@ header {
   border-bottom: 1px solid #e4e4e0;
 }
 
+.header-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+#report {
+  overflow-x: auto;
+}
+
+#report table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+#report caption {
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  margin: 0 0 6px;
+}
+
+#report th,
+#report td {
+  text-align: left;
+  vertical-align: top;
+  padding: 3px 8px 3px 0;
+  white-space: nowrap;
+}
+
+#report td:first-child {
+  font: 12px/1.35 ui-monospace, Consolas, monospace;
+}
+
+#report .report-download {
+  margin-top: 8px;
+}
+
 button {
   font: inherit;
   cursor: pointer;

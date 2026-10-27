@@ -58,7 +58,50 @@ function baseRow(record, section, ignoreReason, context) {
     exclude: marks.exclude,
     documentFailed: false,
     ...summarizeRequests(record.requests),
+    ...requestErrors(record.requests),
   };
+}
+
+function requestErrors(requests) {
+  const errors = [];
+  let errorCount = 0;
+  for (const request of requests) {
+    if (typeof request.error !== 'string' || request.error === '') continue;
+    errorCount += 1;
+    if (!errors.includes(request.error)) errors.push(request.error);
+  }
+  return { requestCount: requests.length, errorCount, errors };
+}
+
+const CSV_HEADER = 'domain,status,requests,errors,error_list,avg_time_ms,avg_speed_bps';
+const CSV_STATUS = { ok: 'ок', problem: 'не ок', ignored: 'игнор' };
+
+/**
+ * Rows from buildReport as RFC 4180 text. Pure: no log, no network.
+ * @param {object[]} rows
+ * @returns {string}
+ */
+export function toCsv(rows) {
+  const lines = [CSV_HEADER];
+  for (const row of rows) lines.push(csvLine(row));
+  return `\uFEFF${lines.join('\n')}\n`;
+}
+
+function csvLine(row) {
+  return [
+    row.host,
+    CSV_STATUS[row.section],
+    String(row.requestCount),
+    String(row.errorCount),
+    row.errors.join('; '),
+    row.timing ? String(row.timing.avg) : '',
+    row.speed ? String(row.speed.avg) : '',
+  ].map(csvField).join(',');
+}
+
+function csvField(value) {
+  if (!/[",\n\r]/.test(value)) return value;
+  return `"${value.replaceAll('"', '""')}"`;
 }
 
 /**

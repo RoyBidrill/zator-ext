@@ -1,5 +1,6 @@
 import { ATTEMPT_OUTCOME, MESSAGE, PROBE_VERDICT, STORAGE_KEY } from '../core/contract.js';
 import { copyChoices } from '../core/matcher.js';
+import { toCsv } from '../core/report.js';
 
 const TITLES = { ok: 'ОК', problem: 'Проблемы', ignored: 'Игнор' };
 const REASONS = {
@@ -33,6 +34,16 @@ const LIST_TITLES = {
 document.getElementById('open-options').addEventListener('click', () => {
   chrome.runtime.openOptionsPage();
 });
+
+document.getElementById('open-report').addEventListener('click', (event) => {
+  event.stopPropagation();
+  openReport();
+});
+
+const REPORT_ORDER = ['problem', 'ok', 'ignored'];
+const REPORT_STATUS = { ok: 'ок', problem: 'не ок', ignored: 'игнор' };
+const REPORT_COLUMNS = ['домен', 'статус', 'запросы', 'ошибки', 'какие ошибки', 'avg time', 'avg speed'];
+const EMPTY_TAB = 'На этой вкладке ещё нет запросов.';
 
 let loading = false;
 let pending = false;
@@ -383,6 +394,97 @@ function hideButton(host) {
 
 function label(id) {
   return LIST_TITLES[id] || id;
+}
+
+async function openReport() {
+  const section = document.getElementById('report');
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab) {
+    paintReport(section, [], null);
+    return;
+  }
+  const report = await chrome.runtime.sendMessage({ type: MESSAGE.GET_TAB_REPORT, tabId: tab.id });
+  const rows = [];
+  for (const name of REPORT_ORDER) rows.push(...((report && report[name]) || []));
+  paintReport(section, rows, tab.id);
+}
+
+function paintReport(section, rows, tabId) {
+  section.replaceChildren();
+  section.hidden = false;
+  if (!rows.length) section.append(note(EMPTY_TAB));
+  else section.append(reportTable(rows));
+  if (tabId !== null) section.append(downloadButton(rows, tabId));
+}
+
+function reportTable(rows) {
+  const table = document.createElement('table');
+  const caption = document.createElement('caption');
+  caption.textContent = 'Отчёт вкладки';
+  const head = document.createElement('thead');
+  const headRow = document.createElement('tr');
+  for (const label of REPORT_COLUMNS) {
+    const cell = document.createElement('th');
+    cell.scope = 'col';
+    cell.textContent = label;
+    headRow.append(cell);
+  }
+  head.append(headRow);
+  const body = document.createElement('tbody');
+  for (const row of rows) body.append(reportRow(row));
+  table.append(caption, head, body);
+  return table;
+}
+
+function reportRow(row) {
+  const tr = document.createElement('tr');
+  const errors = [...new Set(row.errors || [])].map(reasonText).join('; ');
+  const cells = [
+    row.host,
+    REPORT_STATUS[row.section] || row.section,
+    String(row.requestCount),
+    String(row.errorCount),
+    errors,
+    row.timing ? formatMs(row.timing.avg) : '—',
+    row.speed ? formatBps(row.speed.avg) : '—',
+  ];
+  for (const text of cells) {
+    const cell = document.createElement('td');
+    cell.textContent = text;
+    tr.append(cell);
+  }
+  return tr;
+}
+
+function downloadButton(rows, tabId) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'report-download';
+  button.textContent = 'Скачать CSV';
+  button.addEventListener('click', () => downloadCsv(rows, tabId));
+  return button;
+}
+
+function downloadCsv(rows, tabId) {
+  const url = URL.createObjectURL(new Blob([toCsv(rows)], { type: 'text/csv;charset=utf-8' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = reportFileName(tabId);
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function reportFileName(tabId) {
+  const now = new Date();
+  const pad = (value) => String(value).padStart(2, '0');
+  const stamp = now.getFullYear()
+    + pad(now.getMonth() + 1)
+    + pad(now.getDate())
+    + '-'
+    + pad(now.getHours())
+    + pad(now.getMinutes())
+    + pad(now.getSeconds());
+  return 'zator-report-' + tabId + '-' + stamp + '.csv';
 }
 
 function reasonText(error) {

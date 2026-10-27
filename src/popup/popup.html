@@ -8,8 +8,12 @@
 <body>
   <header>
     <strong>zator-ext</strong>
-    <button type="button" id="open-options">Настройки</button>
+    <div class="header-actions">
+      <button type="button" id="open-report">Отчёт</button>
+      <button type="button" id="open-options">Настройки</button>
+    </div>
   </header>
+  <section id="report" hidden></section>
   <section id="probe" hidden></section>
   <p id="empty" class="muted">На этой вкладке ещё нет запросов.</p>
   <section id="problem"></section>
