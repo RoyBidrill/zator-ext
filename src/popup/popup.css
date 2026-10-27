@@ -1,5 +1,5 @@
 body {
-  width: 380px;
+  width: 640px;
   margin: 0;
   font: 13px/1.4 system-ui, sans-serif;
   color: #1c1c1c;
@@ -21,12 +21,12 @@ header {
 }
 
 #report {
-  overflow-x: auto;
+  overflow-x: hidden;
 }
 
 #report table {
-  width: max-content;
-  min-width: 100%;
+  width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   font-size: 12px;
 }
@@ -45,6 +45,11 @@ header {
   padding: 3px 8px 3px 0;
   white-space: nowrap;
 }
+
+#report th:nth-child(1),
+#report td:nth-child(1) { width: 34%; white-space: normal; overflow-wrap: anywhere; }
+#report th:nth-child(5),
+#report td:nth-child(5) { width: 22%; white-space: normal; overflow-wrap: anywhere; }
 
 #report td:first-child {
   font: 12px/1.35 ui-monospace, Consolas, monospace;
