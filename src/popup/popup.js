@@ -199,6 +199,9 @@ function rowView(row, sectionName, marked, menuOpen) {
   for (const id of row.bypass) marks.append(mark('в обходе: ' + label(id), 'bypass'));
   for (const id of row.exclude) marks.append(mark('в исключениях: ' + label(id), 'exclude'));
   if (row.documentFailed) marks.append(mark('документ не загрузился', 'exclude'));
+  if (row.canceled > 0 && row.finished > 0) {
+    marks.append(mark('отменено ' + row.canceled + ' из ' + (row.canceled + row.finished), 'reason'));
+  }
   if (sectionName === 'problem' && row.reason) marks.append(mark(reasonText(row.reason), 'reason'));
   if (row.ignoreReason === 'sinkhole') marks.append(mark('ip из списка игнора', ''));
   if (row.ignoreReason === 'hidden') marks.append(mark('скрыт вручную', ''));

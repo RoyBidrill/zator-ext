@@ -39,6 +39,8 @@ function rowFor(record, context) {
     ...baseRow(record, folded.outcome, null, context),
     documentFailed: folded.documentFailed,
     reason: folded.reason,
+    canceled: folded.canceled,
+    finished: folded.finished,
   };
 }
 

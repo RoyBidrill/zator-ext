@@ -53,6 +53,23 @@ test('a hidden host stays ignored and a problem keeps its wait', () => {
   assert.equal(report.problem[0].reason, 'net::ERR_TIMED_OUT');
 });
 
+test('a host that answered and was cancelled stays in ok with a cancel count', () => {
+  const hosts = new Map([['rr3---sn-xxx.googlevideo.com', {
+    host: 'rr3---sn-xxx.googlevideo.com',
+    requests: [
+      { statusCode: 200, type: 'xmlhttprequest', startedAt: 0, endedAt: 800 },
+      { statusCode: 200, type: 'xmlhttprequest', startedAt: 0, endedAt: 900 },
+      { error: 'net::ERR_ABORTED', type: 'xmlhttprequest', startedAt: 100, endedAt: 400 },
+      { error: 'net::ERR_ABORTED', type: 'xmlhttprequest', startedAt: 100, endedAt: 500 },
+    ],
+  }]]);
+  const report = buildReport(hosts, context());
+  assert.equal(report.ok[0].host, 'rr3---sn-xxx.googlevideo.com');
+  assert.equal(report.ok[0].canceled, 2);
+  assert.equal(report.ok[0].finished, 2);
+  assert.equal(report.problem.length, 0);
+});
+
 test('a failed refresh keeps the previous copy', () => {
   const previous = { text: 'youtube.com\n', fetchedAt: 1, error: false };
   const kept = nextListCopy(previous, { ok: false, text: '' });

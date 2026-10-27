@@ -40,11 +40,36 @@ test('a reset after a 200 is a problem and keeps the later error', () => {
   assert.equal(folded.reason, 'net::ERR_CONNECTION_RESET');
 });
 
-test('an abort after a 200 stays ok', () => {
-  assert.equal(foldHost([
+test('answers mixed with cancels stay ok and keep the cancel count', () => {
+  const folded = foldHost([
     { statusCode: 200 },
     { error: 'net::ERR_ABORTED' },
-  ]).outcome, OUTCOME.OK);
+    { error: 'net::ERR_ABORTED' },
+    { error: 'net::ERR_BLOCKED_BY_CLIENT' },
+  ]);
+  assert.equal(folded.outcome, OUTCOME.OK);
+  assert.equal(folded.canceled, 3);
+  assert.equal(folded.finished, 1);
+});
+
+test('only cancels are still dropped, not a bypass candidate', () => {
+  const folded = foldHost([
+    { error: 'net::ERR_ABORTED' },
+    { error: 'net::ERR_BLOCKED_BY_CLIENT' },
+  ]);
+  assert.equal(folded.outcome, OUTCOME.DROPPED);
+  assert.equal(folded.canceled, 2);
+});
+
+test('a reset after answers is a problem even when cancels sit beside it', () => {
+  const folded = foldHost([
+    { statusCode: 200 },
+    { error: 'net::ERR_ABORTED' },
+    { error: 'net::ERR_CONNECTION_RESET' },
+  ]);
+  assert.equal(folded.outcome, OUTCOME.PROBLEM);
+  assert.equal(folded.canceled, 1);
+  assert.equal(folded.reason, 'net::ERR_CONNECTION_RESET');
 });
 
 test('two resets with no answer are a problem', () => {
