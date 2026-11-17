@@ -20,6 +20,11 @@ header {
   align-items: center;
 }
 
+.zator-error {
+  margin: 8px 10px 0;
+  color: #9b1c1c;
+}
+
 #report {
   overflow-x: hidden;
 }

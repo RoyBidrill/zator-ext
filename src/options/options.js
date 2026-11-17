@@ -1,4 +1,5 @@
 import { DEFAULT_SINKHOLES, MESSAGE, PROBE_DEFAULTS, PROBE_LIMITS, STORAGE_KEY } from '../core/contract.js';
+import { DEFAULT_BASE, normalizeBase, passwordOk } from '../core/zator-push.js';
 import { DEFAULT_CATALOG_BASE, KNOWN_LISTS } from '../background/catalog.js';
 
 const ipPattern = /^(?:\d{1,3}\.){3}\d{1,3}$|^[0-9a-f:]+$/i;
@@ -9,6 +10,7 @@ document.getElementById('sinkhole-reset').addEventListener('click', () => saveSi
 document.getElementById('hidden-clear').addEventListener('click', () => chrome.storage.local.set({ [STORAGE_KEY.HIDDEN]: [] }).then(render));
 document.getElementById('refresh-all').addEventListener('click', refreshAll);
 document.getElementById('base-form').addEventListener('submit', saveBase);
+document.getElementById('zator-form').addEventListener('submit', saveZator);
 
 render();
 
@@ -16,12 +18,14 @@ async function render() {
   const stored = await chrome.storage.local.get([
     STORAGE_KEY.SINKHOLES, STORAGE_KEY.HIDDEN, STORAGE_KEY.LISTS,
     STORAGE_KEY.LIST_ENABLED, STORAGE_KEY.CATALOG_BASE,
+    STORAGE_KEY.ZATOR_BASE, STORAGE_KEY.ZATOR_PASSWORD, STORAGE_KEY.ZATOR_ENABLED,
   ]);
   paintProbe(stored);
   paintSinkholes(stored[STORAGE_KEY.SINKHOLES] || [...DEFAULT_SINKHOLES]);
   paintHidden(stored[STORAGE_KEY.HIDDEN] || []);
   paintLists(stored[STORAGE_KEY.LISTS] || {}, stored[STORAGE_KEY.LIST_ENABLED] || {});
   document.getElementById('catalog-base').value = stored[STORAGE_KEY.CATALOG_BASE] || DEFAULT_CATALOG_BASE;
+  paintZator(stored);
 }
 
 const PROBE_FIELDS = [
@@ -149,6 +153,37 @@ async function refreshAll() {
   await chrome.runtime.sendMessage({ type: MESSAGE.REFRESH_ALL });
   button.disabled = false;
   render();
+}
+
+function paintZator(stored) {
+  const base = document.getElementById('zator-base');
+  if (document.activeElement !== base) base.value = stored[STORAGE_KEY.ZATOR_BASE] || DEFAULT_BASE;
+  const password = document.getElementById('zator-password');
+  if (document.activeElement !== password) password.value = stored[STORAGE_KEY.ZATOR_PASSWORD] || '';
+  document.getElementById('zator-enabled').checked = stored[STORAGE_KEY.ZATOR_ENABLED] === true;
+}
+
+async function saveZator(event) {
+  event.preventDefault();
+  const error = document.getElementById('zator-error');
+  const base = normalizeBase(document.getElementById('zator-base').value);
+  const password = document.getElementById('zator-password').value;
+  if (!base.ok) {
+    error.hidden = false;
+    error.textContent = base.error;
+    return;
+  }
+  if (!passwordOk(password)) {
+    error.hidden = false;
+    error.textContent = 'Пароль должен быть в латинице: иначе заголовок Basic не собрать.';
+    return;
+  }
+  error.hidden = true;
+  await chrome.storage.local.set({
+    [STORAGE_KEY.ZATOR_BASE]: base.base,
+    [STORAGE_KEY.ZATOR_PASSWORD]: password,
+    [STORAGE_KEY.ZATOR_ENABLED]: document.getElementById('zator-enabled').checked,
+  });
 }
 
 function saveBase(event) {

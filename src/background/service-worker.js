@@ -4,6 +4,10 @@ import { classifyAttempt, readSettings, summarize } from '../core/probe.js';
 import { buildReport, nextListCopy } from '../core/report.js';
 import { contentLengthFromHeaders } from '../core/timing.js';
 import { KNOWN_LISTS, downloadList, listUrl } from './catalog.js';
+import {
+  FETCH_TIMEOUT_MS, MANUAL_LISTS,
+  basicHeader, buildPush, cdnHost, decide, enqueue, passwordOk, rememberSent, sentKey,
+} from '../core/zator-push.js';
 
 const tabs = new Map();
 const ALARM = { PAUSE: 'probe-pause', TIMEOUT: 'probe-timeout' };
@@ -62,7 +66,22 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     clearBadge().then(sendResponse);
     return true;
   }
+  if (message.type === MESSAGE.PUSH_HOST) {
+    answerPush(message).then(sendResponse);
+    return true;
+  }
   return false;
+});
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local') return;
+  if (changes[STORAGE_KEY.ZATOR_BASE] || changes[STORAGE_KEY.ZATOR_PASSWORD] || changes[STORAGE_KEY.ZATOR_ENABLED]) {
+    pushCooledUntil = 0;
+    chrome.storage.local.set({ [STORAGE_KEY.ZATOR_FAILS]: {} }).catch(() => {});
+    if (changes[STORAGE_KEY.ZATOR_ENABLED] && changes[STORAGE_KEY.ZATOR_ENABLED].newValue !== true) {
+      pushQueue = pushQueue.filter((item) => item.list !== 'googlevideo');
+    }
+  }
 });
 
 function rememberStart(details) {
@@ -76,6 +95,7 @@ function rememberStart(details) {
   request.startedAt = details.timeStamp;
   request.type = details.type;
   request.host = hostOf(details.url);
+  noteCdn(request.host);
 }
 
 function rememberLength(details) {
@@ -139,6 +159,160 @@ function slot(details) {
   const requests = hosts.get(host).requests;
   if (!requests.has(details.requestId)) requests.set(details.requestId, {});
   return requests.get(details.requestId);
+}
+
+const ZATOR_KEYS = [
+  STORAGE_KEY.ZATOR_BASE, STORAGE_KEY.ZATOR_PASSWORD, STORAGE_KEY.ZATOR_ENABLED,
+  STORAGE_KEY.ZATOR_SENT, STORAGE_KEY.ZATOR_FAILS,
+];
+
+let pushQueue = [];
+let pushFlight = false;
+let pushDoneAt = 0;
+let pushWait = null;
+let pushCooledUntil = 0;
+/** @type {Map<string, { resolve: (value: object) => void }[]>} */
+const pushWaiters = new Map();
+
+function noteCdn(host) {
+  const cdn = cdnHost(host);
+  if (!cdn) return;
+  chrome.storage.local.get([STORAGE_KEY.ZATOR_BASE, STORAGE_KEY.ZATOR_ENABLED]).then((stored) => {
+    if (stored[STORAGE_KEY.ZATOR_ENABLED] !== true || !stored[STORAGE_KEY.ZATOR_BASE]) return;
+    pushQueue = enqueue(pushQueue, { list: 'googlevideo', host: cdn, manual: false });
+    pumpPush();
+  }).catch(() => {});
+}
+
+function answerPush(message) {
+  if (!MANUAL_LISTS.includes(message.list) || !message.host) {
+    return Promise.resolve({ error: 'неизвестный список' });
+  }
+  return new Promise((resolve) => {
+    chrome.storage.local.get(STORAGE_KEY.ZATOR_BASE).then((stored) => {
+      if (!stored[STORAGE_KEY.ZATOR_BASE]) {
+        failPush(message.host, message.list, 'не задан адрес').then(() => resolve({ error: 'не задан адрес' }));
+        return;
+      }
+      const key = sentKey(message.list, message.host);
+      const waiters = pushWaiters.get(key) || [];
+      waiters.push({ resolve });
+      pushWaiters.set(key, waiters);
+      pushQueue = enqueue(pushQueue, { list: message.list, host: message.host, manual: true });
+      pumpPush();
+    }).catch(() => resolve({ error: 'не задан адрес' }));
+  });
+}
+
+function pumpPush() {
+  if (pushFlight || pushWait) return;
+  const now = Date.now();
+  if (pushDoneAt && now - pushDoneAt < 200) {
+    pushWait = setTimeout(() => {
+      pushWait = null;
+      pumpPush();
+    }, 200 - (now - pushDoneAt));
+    return;
+  }
+  const item = pushQueue[0];
+  if (!item) return;
+  pushFlight = true;
+  sendPush(item).finally(() => {
+    pushFlight = false;
+    pushDoneAt = Date.now();
+    pumpPush();
+  });
+}
+
+async function sendPush(item) {
+  const stored = await chrome.storage.local.get(ZATOR_KEYS);
+  const base = stored[STORAGE_KEY.ZATOR_BASE] || '';
+  const password = stored[STORAGE_KEY.ZATOR_PASSWORD] || '';
+  const sent = stored[STORAGE_KEY.ZATOR_SENT] || [];
+  const fails = stored[STORAGE_KEY.ZATOR_FAILS] || {};
+  const key = sentKey(item.list, item.host);
+  const verdict = decide({
+    sent, fails, key, now: Date.now(), inFlight: false, lastDoneAt: 0,
+    cooledUntil: pushCooledUntil, manual: item.manual,
+  });
+  if (!base || !passwordOk(password)) {
+    pushQueue = pushQueue.filter((queued) => queued !== item);
+    const text = base ? 'пароль не годится' : 'не задан адрес';
+    await failPush(item.host, item.list, text);
+    settlePush(key, { error: text });
+    return;
+  }
+  if (verdict === 'skip') {
+    pushQueue = pushQueue.filter((queued) => queued !== item);
+    const fail = fails[key];
+    if (sent.includes(key)) settlePush(key, { ok: true, duplicate: true });
+    else settlePush(key, { error: fail && fail.n >= 5 ? 'пять ошибок, сохраните настройки' : 'повтор через минуту' });
+    return;
+  }
+  if (verdict === 'wait') return;
+  pushQueue = pushQueue.filter((queued) => queued !== item);
+  const push = buildPush(base, item.list, item.host);
+  const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+  const authorization = basicHeader(password);
+  if (authorization) headers.Authorization = authorization;
+  try {
+    const response = await fetch(push.url, {
+      method: 'POST', body: push.body, headers, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    const text = await response.text();
+    let body = null;
+    try { body = JSON.parse(text); } catch { /* not json */ }
+    if (!response.ok || !body || body.ok !== true) {
+      pushCooledUntil = Date.now() + 60_000;
+      const textError = errorText(response.status, text);
+      await noteFail(fails, key, item, textError);
+      settlePush(key, { error: textError });
+      return;
+    }
+    const nextSent = rememberSent(sent, key);
+    delete fails[key];
+    await chrome.storage.local.set({
+      [STORAGE_KEY.ZATOR_SENT]: nextSent,
+      [STORAGE_KEY.ZATOR_FAILS]: fails,
+      [STORAGE_KEY.ZATOR_LAST_ERROR]: null,
+    });
+    notifyZator();
+    settlePush(key, { ok: true, duplicate: body.duplicate === true });
+  } catch (error) {
+    pushCooledUntil = Date.now() + 60_000;
+    const textError = error.name === 'TimeoutError' ? 'таймаут 15 с' : 'сеть';
+    await noteFail(fails, key, item, textError);
+    settlePush(key, { error: textError });
+  }
+}
+
+function settlePush(key, reply) {
+  const waiters = pushWaiters.get(key) || [];
+  pushWaiters.delete(key);
+  for (const waiter of waiters) waiter.resolve(reply);
+}
+
+function errorText(status, text) {
+  const clean = String(text || '').replace(/\s+/g, ' ').slice(0, 160);
+  return (status + ' ' + clean).trim().slice(0, 200);
+}
+
+async function noteFail(fails, key, item, text) {
+  const prior = fails[key] || { n: 0, at: 0 };
+  fails[key] = { n: prior.n + 1, at: Date.now() };
+  await failPush(item.host, item.list, text, fails);
+}
+
+function failPush(host, list, text, fails) {
+  const patch = {
+    [STORAGE_KEY.ZATOR_LAST_ERROR]: { host, list, text: String(text).slice(0, 200), at: Date.now() },
+  };
+  if (fails) patch[STORAGE_KEY.ZATOR_FAILS] = fails;
+  return chrome.storage.local.set(patch).then(notifyZator);
+}
+
+function notifyZator() {
+  chrome.runtime.sendMessage({ type: MESSAGE.ZATOR_CHANGED }).catch(() => {});
 }
 
 function hostOf(url) {

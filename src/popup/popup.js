@@ -49,7 +49,7 @@ let loading = false;
 let pending = false;
 
 chrome.runtime.onMessage.addListener((message) => {
-  if (message.type === MESSAGE.LISTS_CHANGED) load();
+  if (message.type === MESSAGE.LISTS_CHANGED || message.type === MESSAGE.ZATOR_CHANGED) load();
   if (message.type === MESSAGE.TAB_LOG_CHANGED) {
     chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
       if (tab && message.tabId === tab.id) load();
@@ -67,6 +67,8 @@ async function load() {
   loading = true;
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const stored = await chrome.storage.local.get(STORAGE_KEY.ZATOR_LAST_ERROR);
+    paintZatorError(stored[STORAGE_KEY.ZATOR_LAST_ERROR]);
     const report = await chrome.runtime.sendMessage({ type: MESSAGE.GET_TAB_REPORT, tabId: tab.id });
     const probe = await chrome.runtime.sendMessage({ type: MESSAGE.GET_PROBE, tabId: tab.id });
     const menuOpen = document.querySelector('.menu:not([hidden]), [aria-expanded="true"]');
@@ -94,6 +96,16 @@ function holdForMenu() {
   };
   document.addEventListener('click', done, true);
   document.addEventListener('keydown', done, true);
+}
+
+function paintZatorError(error) {
+  const node = document.getElementById('zator-error');
+  if (!error) {
+    node.hidden = true;
+    return;
+  }
+  node.hidden = false;
+  node.textContent = error.list + ' ' + error.host + ': ' + error.text;
 }
 
 function render(report, probe) {
@@ -220,11 +232,31 @@ function rowView(row, sectionName, marked, menuOpen) {
   const actions = document.createElement('div');
   actions.className = 'actions';
   actions.append(markButton(row.host, marked));
+  actions.append(pushButton(row.host, 'netrogat', 'в netrogat'));
+  actions.append(pushButton(row.host, 'custom_rkn', 'в custom_rkn'));
   const menu = copyMenu(row.host, actions, menuOpen);
   if (sectionName === 'problem') actions.append(hideButton(row.host));
 
   root.append(host, actions, marks, timingView(row), menu);
   return root;
+}
+
+function pushButton(host, list, label) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.textContent = label;
+  button.addEventListener('click', async () => {
+    button.disabled = true;
+    button.textContent = '…';
+    const reply = await chrome.runtime.sendMessage({ type: MESSAGE.PUSH_HOST, list, host });
+    button.disabled = false;
+    if (!reply || reply.error) {
+      button.textContent = reply?.error || 'ошибка';
+      return;
+    }
+    button.textContent = reply.duplicate ? 'уже есть' : 'добавлен';
+  });
+  return button;
 }
 
 function timingView(row) {

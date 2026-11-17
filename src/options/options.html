@@ -40,6 +40,22 @@
     </section>
 
     <section>
+      <h2>ZatorGO</h2>
+      <p class="muted">Автоотправка только media-хостов rrN---sn-….googlevideo.com. Выключение ничего с роутера не удаляет. Пароль хранится в браузере и уходит как HTTP Basic с пустым логином.</p>
+      <form id="zator-form">
+        <label>Адрес
+          <input id="zator-base" size="42" spellcheck="false" autocomplete="off">
+        </label>
+        <label>Пароль
+          <input id="zator-password" type="password" size="16" autocomplete="new-password">
+        </label>
+        <label><input id="zator-enabled" type="checkbox"> Автоотправка googlevideo</label>
+        <button type="submit">Сохранить</button>
+      </form>
+      <p id="zator-error" class="error" hidden></p>
+    </section>
+
+    <section>
       <h2>Известные списки zator</h2>
       <p class="muted">Только сверка. На роутер ничего не пишется. Выключенный список не ставит пометку.</p>
       <form id="base-form">

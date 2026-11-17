@@ -23,6 +23,8 @@ export const MESSAGE = Object.freeze({
   TAB_LOG_CHANGED: 'tabLogChanged',
   REFRESH_LIST: 'refreshList',
   REFRESH_ALL: 'refreshAll',
+  PUSH_HOST: 'pushHost',
+  ZATOR_CHANGED: 'zatorChanged',
   GET_PROBE: 'getProbe',
   START_PROBE: 'startProbe',
   STOP_PROBE: 'stopProbe',
@@ -66,6 +68,12 @@ export const STORAGE_KEY = Object.freeze({
   PROBE_TIMEOUT_SEC: 'probeTimeoutSec',
   PROBE_MARKS: 'probeMarks',
   PROBE_RUN: 'probeRun',
+  ZATOR_BASE: 'zatorBase',
+  ZATOR_PASSWORD: 'zatorPassword',
+  ZATOR_ENABLED: 'zatorEnabled',
+  ZATOR_SENT: 'zatorSent',
+  ZATOR_FAILS: 'zatorFails',
+  ZATOR_LAST_ERROR: 'zatorLastError',
 });
 
 export const PROBE_DEFAULTS = Object.freeze({
